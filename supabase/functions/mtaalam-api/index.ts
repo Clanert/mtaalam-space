@@ -13,6 +13,7 @@ const allowedOrigins = new Set([
   "https://mtaalam.space",
   "https://www.mtaalam.space",
   "https://mtaalam-space.nobert360.chatgpt.site",
+  "https://clanert.github.io",
 ]);
 
 type Json = Record<string, unknown>;
@@ -195,7 +196,7 @@ async function sendAnnouncement(admin: ReturnType<typeof adminClient>, announcem
     const response = await fetch("https://api.resend.com/emails/batch", {
       method: "POST",
       headers: { "Authorization": `Bearer ${resendKey}`, "Content-Type": "application/json", "Idempotency-Key": `${announcement.id}-${offset / 100}` },
-      body: JSON.stringify(chunk.map((recipient) => ({ from: emailFrom, to: [recipient.email], subject: announcement.subject, html: `<div style="font-family:Arial,sans-serif;line-height:1.6"><h2 style="color:#233b91">Mtaalam Space</h2><p>${escapeHtml(announcement.message).replace(/\n/g,"<br>")}</p><p><a href="https://mtaalam-space.nobert360.chatgpt.site/" style="background:#8cc641;color:#fff;padding:10px 16px;text-decoration:none;border-radius:6px">Open Mtaalam Space</a></p></div>` }))),
+      body: JSON.stringify(chunk.map((recipient) => ({ from: emailFrom, to: [recipient.email], subject: announcement.subject, html: `<div style="font-family:Arial,sans-serif;line-height:1.6"><h2 style="color:#233b91">Mtaalam Space</h2><p>${escapeHtml(announcement.message).replace(/\n/g,"<br>")}</p><p><a href="https://clanert.github.io/mtaalam-space/" style="background:#8cc641;color:#fff;padding:10px 16px;text-decoration:none;border-radius:6px">Open Mtaalam Space</a></p></div>` }))),
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -218,7 +219,7 @@ async function sendDirectEmail(to: string | null | undefined, subject: string, m
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { "Authorization": `Bearer ${resendKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: emailFrom, to: [to], subject, html: `<div style="font-family:Arial,sans-serif;line-height:1.6"><h2 style="color:#233b91">Mtaalam Space</h2><p>${escapeHtml(message).replace(/\n/g,"<br>")}</p><p><a href="https://mtaalam-space.nobert360.chatgpt.site/" style="background:#8cc641;color:#fff;padding:10px 16px;text-decoration:none;border-radius:6px">Open Mtaalam Space</a></p></div>` }),
+      body: JSON.stringify({ from: emailFrom, to: [to], subject, html: `<div style="font-family:Arial,sans-serif;line-height:1.6"><h2 style="color:#233b91">Mtaalam Space</h2><p>${escapeHtml(message).replace(/\n/g,"<br>")}</p><p><a href="https://clanert.github.io/mtaalam-space/" style="background:#8cc641;color:#fff;padding:10px 16px;text-decoration:none;border-radius:6px">Open Mtaalam Space</a></p></div>` }),
     });
     return { configured: true, sent: response.ok };
   } catch {
