@@ -17,6 +17,7 @@ const allowedOrigins = new Set([
 
 type Json = Record<string, unknown>;
 type ContentType = "course" | "lesson" | "material" | "story";
+const defaultPaymentMethods = [{ id: "lipa-main", label_en: "Lipa Namba", label_sw: "Lipa Namba", provider: "Mobile payment", account_name: "Mtaalam Space", account_number: "654321", instructions_en: "Use this number, then upload your receipt.", instructions_sw: "Tumia namba hii, kisha pakia risiti yako.", whatsapp_number: "", enabled: true, sort_order: 1 }];
 
 function adminClient() {
   return createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -42,6 +43,24 @@ function json(req: Request, body: unknown, status = 200) {
 
 function text(value: unknown, max = 500) {
   return String(value ?? "").trim().slice(0, max);
+}
+
+function cleanPaymentMethods(value: unknown, includeDisabled = false) {
+  if (!Array.isArray(value)) return defaultPaymentMethods;
+  const methods = value.slice(0, 10).map((item: any, index: number) => ({
+    id: text(item?.id, 80).replace(/[^a-zA-Z0-9_-]/g, "") || `payment-${index + 1}`,
+    label_en: text(item?.label_en, 80),
+    label_sw: text(item?.label_sw || item?.label_en, 80),
+    provider: text(item?.provider, 80),
+    account_name: text(item?.account_name, 120),
+    account_number: text(item?.account_number, 60),
+    instructions_en: text(item?.instructions_en, 500),
+    instructions_sw: text(item?.instructions_sw || item?.instructions_en, 500),
+    whatsapp_number: text(item?.whatsapp_number, 30).replace(/[^0-9+]/g, ""),
+    enabled: Boolean(item?.enabled),
+    sort_order: Math.max(1, Math.min(100, Number(item?.sort_order || index + 1))),
+  })).filter((item) => item.label_en.length >= 2 && item.account_number.length >= 3);
+  return (includeDisabled ? methods : methods.filter((item) => item.enabled)).sort((a, b) => a.sort_order - b.sort_order);
 }
 
 function uuid(value: unknown) {
@@ -224,16 +243,18 @@ Deno.serve(async (req: Request) => {
   try {
     if (req.method === "GET" && action === "catalog") {
       const now = new Date().toISOString();
-      const [courses, lessons, materials, stories, settings] = await Promise.all([
+      const [courses, lessons, materials, stories, settings, paymentSettings] = await Promise.all([
         admin.from("mtaalam_courses").select("id,slug,title_en,title_sw,description_en,description_sw,category_en,category_sw,price_tzs,access_days,thumbnail_url,published,available_until").eq("published", true).is("deleted_at", null).eq("is_flagged", false).or(`available_until.is.null,available_until.gt.${now}`).order("created_at"),
         admin.from("mtaalam_lessons").select("id,course_id,slug,sort_order,title_en,title_sw,short_en,short_sw,description_en,description_sw,category_en,category_sw,duration,price_tzs,access_days,thumbnail_url,is_free,published,available_until").eq("published", true).is("deleted_at", null).eq("is_flagged", false).or(`available_until.is.null,available_until.gt.${now}`).order("sort_order"),
         admin.from("mtaalam_materials").select("id,slug,title_en,title_sw,description_en,description_sw,category_en,category_sw,pages,price_tzs,access_days,thumbnail_url,published,available_until").eq("published", true).is("deleted_at", null).eq("is_flagged", false).or(`available_until.is.null,available_until.gt.${now}`).order("created_at"),
         admin.from("mtaalam_stories").select("id,sort_order,media_type,image_url,learner_name,role_en,role_sw,quote_en,quote_sw,context_en,context_sw,published,available_until").eq("published", true).is("deleted_at", null).eq("is_flagged", false).or(`available_until.is.null,available_until.gt.${now}`).order("sort_order"),
         admin.from("mtaalam_site_settings").select("setting_value").eq("setting_key", "home").maybeSingle(),
+        admin.from("mtaalam_site_settings").select("setting_value").eq("setting_key", "payments").maybeSingle(),
       ]);
-      const error = courses.error || lessons.error || materials.error || stories.error || settings.error;
+      const error = courses.error || lessons.error || materials.error || stories.error || settings.error || paymentSettings.error;
       if (error) return json(req, { error: error.message }, 500);
-      return json(req, { courses: courses.data, lessons: lessons.data, materials: materials.data, stories: stories.data, home: settings.data?.setting_value ?? {} });
+      const paymentValue: any = paymentSettings.data?.setting_value ?? {};
+      return json(req, { courses: courses.data, lessons: lessons.data, materials: materials.data, stories: stories.data, home: settings.data?.setting_value ?? {}, payment_methods: cleanPaymentMethods(paymentValue.methods) });
     }
 
     if (req.method === "GET" && action === "reviews") {
@@ -454,7 +475,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "admin-dashboard") {
-      const [usersResult, profiles, courses, lessons, materials, stories, purchases, grants, events, activities, announcements, home] = await Promise.all([
+      const [usersResult, profiles, courses, lessons, materials, stories, purchases, grants, events, activities, announcements, home, paymentSettings] = await Promise.all([
         admin.auth.admin.listUsers({ page: 1, perPage: 500 }),
         admin.from("mtaalam_profiles").select("user_id,full_name,phone,preferred_language,is_suspended,admin_notes"),
         admin.from("mtaalam_courses").select("*").order("created_at"),
@@ -467,12 +488,14 @@ Deno.serve(async (req: Request) => {
         admin.from("mtaalam_content_activity").select("user_id,item_type,item_id,event_type,created_at").order("created_at", { ascending: false }).limit(300),
         admin.from("mtaalam_announcements").select("*").order("created_at", { ascending: false }).limit(50),
         admin.from("mtaalam_site_settings").select("setting_value").eq("setting_key", "home").maybeSingle(),
+        admin.from("mtaalam_site_settings").select("setting_value").eq("setting_key", "payments").maybeSingle(),
       ]);
-      const error = usersResult.error || profiles.error || courses.error || lessons.error || materials.error || stories.error || purchases.error || grants.error || events.error || activities.error || announcements.error || home.error;
+      const error = usersResult.error || profiles.error || courses.error || lessons.error || materials.error || stories.error || purchases.error || grants.error || events.error || activities.error || announcements.error || home.error || paymentSettings.error;
       if (error) return json(req, { error: error.message }, 500);
       const profileMap = new Map((profiles.data ?? []).map((p: any) => [p.user_id, p]));
       const users = (usersResult.data.users ?? []).map((u) => ({ id: u.id, email: u.email, phone: profileMap.get(u.id)?.phone || u.phone, created_at: u.created_at, last_sign_in_at: u.last_sign_in_at, name: profileMap.get(u.id)?.full_name || u.user_metadata?.full_name || "", preferred_language: profileMap.get(u.id)?.preferred_language || "en", role: u.app_metadata?.role || "learner", is_suspended: Boolean(profileMap.get(u.id)?.is_suspended), admin_notes: profileMap.get(u.id)?.admin_notes || "" }));
-      return json(req, { users, courses: courses.data, lessons: lessons.data, materials: materials.data, stories: stories.data, purchases: purchases.data, grants: grants.data, security_events: events.data, activities: activities.data, announcements: announcements.data, home: home.data?.setting_value ?? {}, email_configured: Boolean(resendKey && emailFrom) });
+      const paymentValue: any = paymentSettings.data?.setting_value ?? {};
+      return json(req, { users, courses: courses.data, lessons: lessons.data, materials: materials.data, stories: stories.data, purchases: purchases.data, grants: grants.data, security_events: events.data, activities: activities.data, announcements: announcements.data, home: home.data?.setting_value ?? {}, payment_methods: cleanPaymentMethods(paymentValue.methods, true), email_configured: Boolean(resendKey && emailFrom) });
     }
 
     if (action === "admin-save") {
@@ -679,6 +702,19 @@ Deno.serve(async (req: Request) => {
       const { data, error } = await admin.from("mtaalam_site_settings").upsert({ setting_key: "home", setting_value: settings, updated_by: user.id, updated_at: new Date().toISOString() }, { onConflict: "setting_key" }).select("setting_value").single();
       if (error) return json(req, { error: error.message }, 400);
       return json(req, { home: data.setting_value });
+    }
+
+    if (action === "admin-save-payment-methods") {
+      const body = await req.json();
+      const methods = cleanPaymentMethods(body.methods, true);
+      if (!methods.length) return json(req, { error: "Add at least one valid payment option." }, 400);
+      if (!methods.some((method) => method.enabled)) return json(req, { error: "Keep at least one payment option active." }, 400);
+      const ids = methods.map((method) => method.id);
+      if (new Set(ids).size !== ids.length) return json(req, { error: "Every payment option needs a unique ID." }, 400);
+      const { data, error } = await admin.from("mtaalam_site_settings").upsert({ setting_key: "payments", setting_value: { methods }, updated_by: user.id, updated_at: new Date().toISOString() }, { onConflict: "setting_key" }).select("setting_value").single();
+      if (error) return json(req, { error: error.message }, 400);
+      await securityEvent({ user_id: user.id, event_type: "admin_payment_methods_updated", severity: "medium", summary: `Administrator updated ${methods.length} payment option(s).` });
+      return json(req, { payment_methods: cleanPaymentMethods((data.setting_value as any)?.methods, true) });
     }
 
     if (action === "admin-hero-upload-url") {
