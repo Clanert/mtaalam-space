@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#8cc641">
   <meta name="description" content="Mtaalam Space by Clanert — simple video lessons and practical learning materials.">
+  <meta name="application-name" content="Mtaalam Space">
+  <meta name="format-detection" content="telephone=no">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -13,6 +15,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
   <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
+  <link rel="apple-touch-icon-precomposed" sizes="180x180" href="icons/icon-180.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -242,8 +245,10 @@
     function logoutUser(){sessionStorage.removeItem('mtaalamSession');sessionStorage.removeItem('mtaalamUser');sessionStorage.removeItem('mtaalamApprovedNotified');approvedAccess=[];userRequests=[];adminState.isAdmin=false;document.querySelectorAll('[data-admin-link]').forEach(el=>el.classList.add('hidden'));refreshAccount();renderLessonList();renderMaterials();renderAccountRequests();showAuthMode('login');showToast(sw()?'Umetoka kwenye akaunti.':'You are logged out.')}
     function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>t.classList.remove('show'),2400)}
     let installPrompt=null;
+    const isIos=/iphone|ipad|ipod/i.test(navigator.userAgent),isStandalone=window.matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+    if(isIos&&!isStandalone)document.getElementById('installButton').classList.add('show');
     window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;document.getElementById('installButton').classList.add('show')});
-    document.getElementById('installButton').addEventListener('click',async()=>{if(!installPrompt)return;installPrompt.prompt();const result=await installPrompt.userChoice;if(result.outcome==='accepted')showToast('Mtaalam is being installed.');installPrompt=null;document.getElementById('installButton').classList.remove('show')});
+    document.getElementById('installButton').addEventListener('click',async()=>{if(isIos){alert(sw()?'Kwenye iPhone: bonyeza kitufe cha Shiriki kwenye Safari, chagua “Add to Home Screen”, kisha bonyeza Add.':'On iPhone: tap the Share button in Safari, choose “Add to Home Screen”, then tap Add.');return}if(!installPrompt){showToast(sw()?'Fungua menyu ya kivinjari na uchague Sakinisha programu.':'Open your browser menu and choose Install app.');return}installPrompt.prompt();const result=await installPrompt.userChoice;if(result.outcome==='accepted')showToast('Mtaalam is being installed.');installPrompt=null;document.getElementById('installButton').classList.remove('show')});
     window.addEventListener('appinstalled',()=>{document.getElementById('installButton').classList.remove('show');showToast('Mtaalam installed successfully.')});
     if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>showToast('Offline setup will retry next time.')))}
     document.getElementById('menuButton').onclick=()=>document.getElementById('mobileNav').classList.toggle('open');document.addEventListener('keydown',e=>{if(e.key==='Escape')showView('home')});renderCards();selectLesson(0);

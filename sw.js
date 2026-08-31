@@ -1,4 +1,4 @@
-const CACHE = 'mtaalam-space-v15';
+const CACHE = 'mtaalam-space-v16-ios';
 const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './icons/mtaalam-logo.png', './icons/icon-32.png', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png'];
 
 self.addEventListener('install', event => {
